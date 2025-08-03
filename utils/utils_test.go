@@ -3,6 +3,7 @@ package utils
 import (
 	"archive/tar"
 	"compress/gzip"
+	"io"
 	"io/ioutil"
 	"os"
 	"testing"
@@ -57,4 +58,229 @@ func TestIsValidElvArchive(t *testing.T) {
 	archive3 := createTestTarGz(t, files)
 	defer os.Remove(archive3)
 	assert.False(t, IsValidElvArchive(archive3), "should not detect archive without config.yaml")
+}
+
+func TestCreateElvArchive(t *testing.T) {
+	// Test data simulating database content
+	templateHTML := `<!DOCTYPE html>
+<html>
+<head><title>Test Template</title></head>
+<body><h1>Hello World</h1></body>
+</html>`
+
+	styleCSS := `body { font-family: Arial, sans-serif; color: #333; }`
+
+	functionJS := `function hello() { console.log("Hello from JS!"); }`
+
+	configYAML := `version: "1.0.0"
+elvdoc:
+  name: "test-package"
+  description: "Test package for unit testing"`
+
+	// Create temporary file for output
+	tempFile, err := ioutil.TempFile("", "test-archive-*.tar.gz")
+	assert.NoError(t, err)
+	tempFile.Close()
+	defer os.Remove(tempFile.Name())
+
+	// Test CreateElvArchive with string content
+	err = CreateElvArchive(tempFile.Name(), templateHTML, styleCSS, functionJS, configYAML)
+	assert.NoError(t, err, "CreateElvArchive should succeed")
+
+	// Verify the archive was created and is valid
+	assert.True(t, IsValidElvArchive(tempFile.Name()), "created archive should be valid")
+
+	// Verify the archive contains the correct files with correct content
+	verifyArchiveContent(t, tempFile.Name(), templateHTML, styleCSS, functionJS, configYAML)
+}
+
+func TestReadFileAsString(t *testing.T) {
+	// Create a temporary file with test content
+	tempFile, err := ioutil.TempFile("", "test-*.txt")
+	assert.NoError(t, err)
+	defer os.Remove(tempFile.Name())
+
+	testContent := "Hello, this is test content!"
+	_, err = tempFile.WriteString(testContent)
+	assert.NoError(t, err)
+	tempFile.Close()
+
+	// Test reading the file as string
+	content, err := ReadFileAsString(tempFile.Name())
+	assert.NoError(t, err)
+	assert.Equal(t, testContent, content)
+
+	// Test reading non-existent file
+	_, err = ReadFileAsString("non-existent-file.txt")
+	assert.Error(t, err)
+}
+
+func TestReadElvDocFiles(t *testing.T) {
+	// Create temporary directory structure
+	tempDir, err := ioutil.TempDir("", "elvdoc-test-*")
+	assert.NoError(t, err)
+	defer os.RemoveAll(tempDir)
+
+	// Test file contents
+	templateContent := "<html><body>Test Template</body></html>"
+	styleContent := "body { margin: 0; }"
+	functionContent := "console.log('test');"
+	configContent := "version: 1.0.0\nelvdoc: {name: test}"
+
+	// Create test files
+	files := map[string]string{
+		"template.html": templateContent,
+		"style.css":     styleContent,
+		"function.js":   functionContent,
+		"config.yaml":   configContent,
+	}
+
+	for filename, content := range files {
+		filePath := tempDir + string(os.PathSeparator) + filename
+		err := ioutil.WriteFile(filePath, []byte(content), 0644)
+		assert.NoError(t, err)
+	}
+
+	// Test reading all files
+	template, style, function, config, err := ReadElvDocFiles(tempDir)
+	assert.NoError(t, err)
+	assert.Equal(t, templateContent, template)
+	assert.Equal(t, styleContent, style)
+	assert.Equal(t, functionContent, function)
+	assert.Equal(t, configContent, config)
+
+	// Test with missing file
+	os.Remove(tempDir + string(os.PathSeparator) + "template.html")
+	_, _, _, _, err = ReadElvDocFiles(tempDir)
+	assert.Error(t, err)
+}
+
+func TestCreateElvArchiveFromFiles(t *testing.T) {
+	// Create temporary directory and files
+	tempDir, err := ioutil.TempDir("", "elvdoc-test-*")
+	assert.NoError(t, err)
+	defer os.RemoveAll(tempDir)
+
+	// Test file contents
+	templateContent := "<html><body>Test Template</body></html>"
+	styleContent := "body { margin: 0; }"
+	functionContent := "console.log('test');"
+	configContent := "version: 1.0.0\nelvdoc: {name: test}"
+
+	// Create test files
+	files := map[string]string{
+		"template.html": templateContent,
+		"style.css":     styleContent,
+		"function.js":   functionContent,
+		"config.yaml":   configContent,
+	}
+
+	filePaths := make(map[string]string)
+	for filename, content := range files {
+		filePath := tempDir + string(os.PathSeparator) + filename
+		err := ioutil.WriteFile(filePath, []byte(content), 0644)
+		assert.NoError(t, err)
+		filePaths[filename] = filePath
+	}
+
+	// Create output archive
+	tempFile, err := ioutil.TempFile("", "test-archive-*.tar.gz")
+	assert.NoError(t, err)
+	tempFile.Close()
+	defer os.Remove(tempFile.Name())
+
+	// Test CreateElvArchiveFromFiles
+	err = CreateElvArchiveFromFiles(
+		tempFile.Name(),
+		filePaths["template.html"],
+		filePaths["style.css"],
+		filePaths["function.js"],
+		filePaths["config.yaml"],
+	)
+	assert.NoError(t, err)
+
+	// Verify the archive
+	assert.True(t, IsValidElvArchive(tempFile.Name()))
+	verifyArchiveContent(t, tempFile.Name(), templateContent, styleContent, functionContent, configContent)
+}
+
+func TestCreateElvArchiveFromDir(t *testing.T) {
+	// Create temporary directory with elvdoc files
+	tempDir, err := ioutil.TempDir("", "elvdoc-test-*")
+	assert.NoError(t, err)
+	defer os.RemoveAll(tempDir)
+
+	// Test file contents
+	templateContent := "<html><body>Test Template</body></html>"
+	styleContent := "body { margin: 0; }"
+	functionContent := "console.log('test');"
+	configContent := "version: 1.0.0\nelvdoc: {name: test}"
+
+	// Create test files
+	files := map[string]string{
+		"template.html": templateContent,
+		"style.css":     styleContent,
+		"function.js":   functionContent,
+		"config.yaml":   configContent,
+	}
+
+	for filename, content := range files {
+		filePath := tempDir + string(os.PathSeparator) + filename
+		err := ioutil.WriteFile(filePath, []byte(content), 0644)
+		assert.NoError(t, err)
+	}
+
+	// Create output archive
+	tempFile, err := ioutil.TempFile("", "test-archive-*.tar.gz")
+	assert.NoError(t, err)
+	tempFile.Close()
+	defer os.Remove(tempFile.Name())
+
+	// Test CreateElvArchiveFromDir
+	err = CreateElvArchiveFromDir(tempFile.Name(), tempDir)
+	assert.NoError(t, err)
+
+	// Verify the archive
+	assert.True(t, IsValidElvArchive(tempFile.Name()))
+	verifyArchiveContent(t, tempFile.Name(), templateContent, styleContent, functionContent, configContent)
+}
+
+// Helper function to verify archive content
+func verifyArchiveContent(t *testing.T, archivePath, expectedTemplate, expectedStyle, expectedFunction, expectedConfig string) {
+	t.Helper()
+
+	// Open and read the archive
+	f, err := os.Open(archivePath)
+	assert.NoError(t, err)
+	defer f.Close()
+
+	gz, err := gzip.NewReader(f)
+	assert.NoError(t, err)
+	defer gz.Close()
+
+	tr := tar.NewReader(gz)
+
+	foundFiles := make(map[string]string)
+
+	for {
+		hdr, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		assert.NoError(t, err)
+
+		content, err := ioutil.ReadAll(tr)
+		assert.NoError(t, err)
+
+		foundFiles[hdr.Name] = string(content)
+	}
+
+	// Verify all expected files are present with correct content
+	assert.Equal(t, expectedTemplate, foundFiles["elvdoc/template.html"], "template.html content should match")
+	assert.Equal(t, expectedStyle, foundFiles["elvdoc/style.css"], "style.css content should match")
+	assert.Equal(t, expectedFunction, foundFiles["elvdoc/function.js"], "function.js content should match")
+	assert.Equal(t, expectedConfig, foundFiles["elvdoc/config.yaml"], "config.yaml content should match")
+
+	// Verify we have exactly 4 files
+	assert.Len(t, foundFiles, 4, "archive should contain exactly 4 files")
 }
