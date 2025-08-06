@@ -1,0 +1,18 @@
+version: 1.0.0
+elvdoc:
+  name: Invoice Template
+  description: >
+    This package contains the template, scripts, and styles for invoice generation in the Elvoiz app.
+  author: Elvoiz Team
+  created: 2025-08-01
+  files:
+    - template.html
+    - function.js
+    - style.css
+    - config.yaml
+
+# Additional configuration for your package can go below
+settings:
+  currency: USD
+  locale: en-US
+  enableDiscounts: true
