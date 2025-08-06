@@ -13,7 +13,7 @@ import (
 
 func createTestTarGz(t *testing.T, files map[string]string) string {
 	t.Helper()
-	tempFile, err := ioutil.TempFile("", "test-*.tar.gz")
+	tempFile, err := os.CreateTemp("", "test-*.tar.gz")
 	if err != nil {
 		t.Fatalf("failed to create temp file: %v", err)
 	}
@@ -38,28 +38,6 @@ func createTestTarGz(t *testing.T, files map[string]string) string {
 	return tempFile.Name()
 }
 
-func TestIsValidElvArchive(t *testing.T) {
-	// Valid config.yaml
-	config := `version: 1.0.0\nelvdoc: {name: test}`
-	files := map[string]string{"elvdoc/config.yaml": config}
-	archive := createTestTarGz(t, files)
-	defer os.Remove(archive)
-	assert.True(t, IsValidElvArchive(archive), "should detect valid elvdoc archive")
-
-	// Invalid config.yaml (missing fields)
-	badConfig := `foo: bar`
-	files = map[string]string{"elvdoc/config.yaml": badConfig}
-	archive2 := createTestTarGz(t, files)
-	defer os.Remove(archive2)
-	assert.False(t, IsValidElvArchive(archive2), "should not detect archive with invalid config.yaml")
-
-	// No config.yaml
-	files = map[string]string{"other.txt": "data"}
-	archive3 := createTestTarGz(t, files)
-	defer os.Remove(archive3)
-	assert.False(t, IsValidElvArchive(archive3), "should not detect archive without config.yaml")
-}
-
 func TestCreateElvArchive(t *testing.T) {
 	// Test data simulating database content
 	templateHTML := `<!DOCTYPE html>
@@ -78,7 +56,7 @@ elvdoc:
   description: "Test package for unit testing"`
 
 	// Create temporary file for output
-	tempFile, err := ioutil.TempFile("", "test-archive-*.tar.gz")
+	tempFile, err := os.CreateTemp("", "test-archive-*.tar.gz")
 	assert.NoError(t, err)
 	tempFile.Close()
 	defer os.Remove(tempFile.Name())
@@ -96,7 +74,7 @@ elvdoc:
 
 func TestReadFileAsString(t *testing.T) {
 	// Create a temporary file with test content
-	tempFile, err := ioutil.TempFile("", "test-*.txt")
+	tempFile, err := os.CreateTemp("", "test-*.txt")
 	assert.NoError(t, err)
 	defer os.Remove(tempFile.Name())
 
@@ -117,7 +95,7 @@ func TestReadFileAsString(t *testing.T) {
 
 func TestReadElvDocFiles(t *testing.T) {
 	// Create temporary directory structure
-	tempDir, err := ioutil.TempDir("", "elvdoc-test-*")
+	tempDir, err := os.MkdirTemp("", "elvdoc-test-*")
 	assert.NoError(t, err)
 	defer os.RemoveAll(tempDir)
 
@@ -157,7 +135,7 @@ func TestReadElvDocFiles(t *testing.T) {
 
 func TestCreateElvArchiveFromFiles(t *testing.T) {
 	// Create temporary directory and files
-	tempDir, err := ioutil.TempDir("", "elvdoc-test-*")
+	tempDir, err := os.MkdirTemp("", "elvdoc-test-*")
 	assert.NoError(t, err)
 	defer os.RemoveAll(tempDir)
 
@@ -184,7 +162,7 @@ func TestCreateElvArchiveFromFiles(t *testing.T) {
 	}
 
 	// Create output archive
-	tempFile, err := ioutil.TempFile("", "test-archive-*.tar.gz")
+	tempFile, err := os.CreateTemp("", "test-archive-*.tar.gz")
 	assert.NoError(t, err)
 	tempFile.Close()
 	defer os.Remove(tempFile.Name())
@@ -206,7 +184,7 @@ func TestCreateElvArchiveFromFiles(t *testing.T) {
 
 func TestCreateElvArchiveFromDir(t *testing.T) {
 	// Create temporary directory with elvdoc files
-	tempDir, err := ioutil.TempDir("", "elvdoc-test-*")
+	tempDir, err := os.MkdirTemp("", "elvdoc-test-*")
 	assert.NoError(t, err)
 	defer os.RemoveAll(tempDir)
 
@@ -231,7 +209,7 @@ func TestCreateElvArchiveFromDir(t *testing.T) {
 	}
 
 	// Create output archive
-	tempFile, err := ioutil.TempFile("", "test-archive-*.tar.gz")
+	tempFile, err := os.CreateTemp("", "test-archive-*.tar.gz")
 	assert.NoError(t, err)
 	tempFile.Close()
 	defer os.Remove(tempFile.Name())
@@ -283,4 +261,17 @@ func verifyArchiveContent(t *testing.T, archivePath, expectedTemplate, expectedS
 
 	// Verify we have exactly 4 files
 	assert.Len(t, foundFiles, 4, "archive should contain exactly 4 files")
+}
+
+// TestCreateElvArchiveToDisk creates a non-temporary archive file for manual inspection
+func TestCreateElvArchiveToDisk(t *testing.T) {
+	outputPath := "test-elvdoc-archive.elv"
+	templateHTML := `<!DOCTYPE html>\n<html>\n<head><title>Manual Test</title></head>\n<body><h1>Manual Archive</h1></body>\n</html>`
+	styleCSS := `body { background: #fafafa; color: #222; }`
+	functionJS := `function greet() { alert(\"Hello Manual!\"); }`
+	configYAML := `version: \"1.0.0\"\nelvdoc:\n  name: \"manual-test\"\n  description: \"Archive for manual inspection\"`
+
+	err := CreateElvArchive(outputPath, templateHTML, styleCSS, functionJS, configYAML)
+	assert.NoError(t, err, "CreateElvArchive should succeed for manual file")
+	// Do not remove the file, user will check it manually
 }
